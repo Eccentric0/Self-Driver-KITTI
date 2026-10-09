@@ -1,0 +1,72 @@
+# 本文件供 tools 下的脚本通过 --config configs/kitti.yaml 读取。
+# 现有 YOLO 全量数据时：prepare_subset_from_prepared.py -> check_dataset.py -> train_detector.py。
+# 有训练权重后可运行 infer_video.py 或 export_onnx.py。
+
+# 固定随机种子：用于数据抽样/训练验证划分，也传给 YOLO 训练以提高复现性。
+seed: 42
+
+data:
+  # 已转换的完整 YOLO 数据；用于无需原始 KITTI 标签的 10% 子集准备。
+  source_prepared_root: data/kitti_100pct
+  # KITTI 原始数据根目录，须包含 training/image_2/*.png 和 training/label_2/*.txt。
+  raw_root: Datas/KITTI
+  # 转换后的 YOLO 数据目录，保存 images、labels 和 subset_manifest.json。
+  # 更换 fraction、train_ratio 或 seed 时，请使用新的输出目录。
+  output_root: data/kitti_10pct
+  # 数据准备脚本生成的 YOLO 数据描述文件；训练、验证和数据检查均读取它。
+  # 可以自定义文件名，但应与 output_root 指向同一组数据。
+  dataset_yaml: data/kitti_10pct/kitti_10pct.yaml
+  # 使用原始带标签图片的比例，范围 (0, 1]；1.0 为全部，0.10 为 10%。
+  # 也可在准备数据时用 --fraction 临时覆盖；覆盖后需注意输出目录和清单。
+  fraction: 0.1
+  # 选中图片中分给训练集的比例，范围 (0, 1)；剩余图片进入验证集。
+  # 1.0 数据集、7481 张原始图片时，0.80 对应 5984 张训练、1497 张验证。
+  train_ratio: 0.80
+
+train:
+  # YOLO 初始权重或模型配置；本地没有 yolo11s.pt 时，Ultralytics 可能联网下载。
+  model: yolo11s.pt
+  image_size: 640
+  batch_size: 1
+  epochs: 100
+  workers: 4
+  device: 0
+  # 是否启用自动混合精度（AMP）；true 通常降低显存开销。
+  # false 可避开部分 Ultralytics 版本的 AMP 检查权重下载；能否增大 batch 取决于实际显存。
+  amp: false
+  # 训练结果的父目录；权重通常位于 project/name/weights/。
+  project: runs/detection
+  # 本次实验名称；修改后请同步更新下方 evaluate/inference/export 的 weights。
+  name: yolo11s_kitti_10pct
+
+evaluate:
+  # 待评估权重；通常使用本次训练生成的 best.pt，也可命令行用 --weights 覆盖。
+  weights: runs/detection/yolo11s_kitti_10pct/weights/best.pt
+  # 验证所用设备；0 表示第一块 GPU，cpu 表示 CPU。
+  device: 0
+
+inference:
+  # 视频检测与跟踪所用权重；可用 infer_video.py 的 --weights 覆盖。
+  weights: runs/detection/yolo11s_kitti_10pct/weights/best.pt
+  # 视频推理设备；0 表示第一块 GPU，cpu 表示 CPU。
+  device: 0
+  # 检测置信度下限，范围通常为 0～1；调高会过滤更多低分框。
+  confidence: 0.30
+  # 检测结果非极大值抑制（NMS）的 IoU 阈值；不是评价指标 mAP 的阈值。
+  iou: 0.50
+  # Ultralytics 跟踪器配置名或配置文件路径；bytetrack.yaml 使用 ByteTrack。
+  tracker: bytetrack.yaml
+  # 每个目标绘制轨迹时最多保留的历史中心点数，按成功跟踪到的帧累计。
+  trail_length: 30
+  # OpenCV VideoWriter 的四字符编码标识（FourCC）；mp4v 常用于 .mp4 输出。
+  output_codec: mp4v
+
+export:
+  # 导出 ONNX 所用的训练权重；可用 export_onnx.py 的 --weights 覆盖。
+  weights: runs/detection/yolo11s_kitti_10pct/weights/best.pt
+  # ONNX 模型的输入图片尺寸（像素）；通常与训练 image_size 保持一致。
+  image_size: 640
+  # ONNX 文件保存目录；文件名使用 train.name 加 .onnx，可用 --output-dir 覆盖。
+  output_dir: exports
+  # ONNX 算子集版本；应选择部署端推理引擎支持的版本。
+  opset: 17

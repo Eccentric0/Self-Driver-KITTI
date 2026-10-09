@@ -1,0 +1,8 @@
+numpy>=1.26,<2
+opencv-python>=4.9,<4.12
+PyYAML>=6,<7
+tqdm>=4.66,<5
+ultralytics>=8.3,<9
+onnx>=1.16,<2
+onnxruntime-gpu>=1.18,<2
+pytest>=8,<9
